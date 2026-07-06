@@ -4,6 +4,12 @@ iPerf3 UI 是一个 vibe coding 项目，用 Tauri、React、TypeScript 和 Rust
 
 这个项目的目标是给 [iPerf3](https://iperf.fr/) 这个网络性能测试工具提供一个更直观的界面，方便调整客户端、服务端、协议、带宽、并发流、传输时长、窗口、认证、SSH 远程运行等参数，并直接运行命令、查看实时日志和结果概览。
 
+
+## 大致演示
+
+https://github.com/user-attachments/assets/4e5cd907-5aa5-41ee-9f04-8d1c197d3f3f
+
+
 ## 前置环境
 
 浏览器预览需要：
