@@ -1,0 +1,81 @@
+name: Build Tauri Windows
+description: Build the Windows Tauri package and stage release assets.
+
+inputs:
+  artifact-name:
+    description: Name used by the caller workflow artifact.
+    required: false
+    default: iperf3-ui-windows-x64
+  output-dir:
+    description: Directory, relative to the repository root, where release assets are staged.
+    required: false
+    default: dist/release
+
+outputs:
+  artifact-name:
+    description: Workflow artifact name.
+    value: ${{ steps.stage.outputs.artifact-name }}
+  artifact-dir:
+    description: Absolute path to the staged release asset directory.
+    value: ${{ steps.stage.outputs.artifact-dir }}
+  checksums-path:
+    description: Absolute path to the SHA256 checksum file.
+    value: ${{ steps.stage.outputs.checksums-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build Tauri app
+      shell: pwsh
+      run: pnpm build:tauri:win
+
+    - id: stage
+      name: Stage release assets
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        $repoRoot = $env:GITHUB_WORKSPACE
+        $outputDir = Join-Path $repoRoot "${{ inputs.output-dir }}"
+        $releaseDir = Join-Path $repoRoot "src-tauri\target\release"
+        $bundleDir = Join-Path $releaseDir "bundle"
+        $exePath = Join-Path $releaseDir "app.exe"
+
+        if (Test-Path -LiteralPath $outputDir) {
+          Remove-Item -LiteralPath $outputDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+
+        if (Test-Path -LiteralPath $exePath) {
+          Copy-Item -LiteralPath $exePath -Destination (Join-Path $outputDir "iPerf3-UI.exe") -Force
+        }
+
+        $msiDir = Join-Path $bundleDir "msi"
+        $msiFiles = @()
+        if (Test-Path -LiteralPath $msiDir) {
+          $msiFiles = @(Get-ChildItem -LiteralPath $msiDir -Filter "*.msi" -File)
+        }
+
+        if ($msiFiles.Count -eq 0) {
+          throw "No MSI package was produced under $msiDir."
+        }
+
+        foreach ($file in $msiFiles) {
+          Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $outputDir $file.Name) -Force
+        }
+
+        $assetFiles = @(Get-ChildItem -LiteralPath $outputDir -File | Sort-Object Name)
+        if ($assetFiles.Count -eq 0) {
+          throw "No release assets were staged."
+        }
+
+        $checksumsPath = Join-Path $outputDir "SHA256SUMS.txt"
+        $hashLines = foreach ($file in $assetFiles) {
+          $hash = Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256
+          "$($hash.Hash.ToLowerInvariant())  $($file.Name)"
+        }
+        $hashLines | Set-Content -LiteralPath $checksumsPath -Encoding ascii
+
+        "artifact-name=${{ inputs.artifact-name }}" >> $env:GITHUB_OUTPUT
+        "artifact-dir=$outputDir" >> $env:GITHUB_OUTPUT
+        "checksums-path=$checksumsPath" >> $env:GITHUB_OUTPUT
